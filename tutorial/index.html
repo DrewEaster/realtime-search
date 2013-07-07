@@ -146,6 +146,16 @@
         percolation</a> to learn more about this powerful feature.
     </p>
 
+    <p>
+        There's also one little important gotcha this code has avoided - closing over the <code>sender</code> ref in an
+        asynchronous callback block. The <code>sender</code> ref is part of the shared mutable state of the actor and
+        so, if the actor were to reply to the sender in the percolate callback, a race condition would be encountered if
+        another thread had modified the actor's state before the percolation call to Elasticsearch had completed. This
+        race condition has been avoided by ensuring to 'freeze' the <code>sender</code> ref - by sending it to a private
+        function <code>private def percolate(logJson: JsValue, requestor: ActorRef)</code> - and close over the
+        parameter instead.
+    </p>
+
     <h3>LogEntryProducerActor</h3>
 
     <p>
@@ -195,8 +205,8 @@
         <li>A single AngularJS controller <a href="#code/app/assets/javascripts/controllers.js"
                                              class="shortcut">/app/assets/javascripts/controllers.js</a></li>
     </ol>
-    The application makes use of the <a href="http://www.webjars.org/">WebJar</a> project to hugely simplify the
-    introduction of JS and CSS dependencies (e.g. AngularJS and Twitter Bootstrap).
+    The application makes use of the <a href="http://www.webjars.org/">WebJars</a> project to simplify the
+    introduction of its JS and CSS dependencies (e.g. AngularJS and Twitter Bootstrap).
     </p>
     <h3>UI Template</h3>
 
