@@ -9,7 +9,8 @@
     <p>
         This Activator Template is a simple demonstration of integrating Play, Akka, AngularJS and Elasticsearch
         to create a reactive, real-time log entry search application. The log entry data is in this example is just
-        'randomly' generated for the purposes of keeping things simple.
+        'randomly' generated for the purposes of keeping things simple. The tutorial assumes you've grasped at
+        least the very basic concepts of a Play! application.
     </p>
 
     <p>
@@ -28,9 +29,12 @@
     <p>
 
     <h3>Elasticsearch</h3>
-    We use the bonsai cool percolation feature of Elasticsearch to achieve the real-time search aspect of the
-    application. The application starts
-    up an embedded Elasticsearch node, so no need to run your own external instance.
+    We use the "bonsai cool" percolation feature of Elasticsearch to achieve the real-time search aspect of the
+    application. The application starts up an embedded Elasticsearch node, so no need to run your own external instance.
+    Take a look at <a href="#code/app/utils/EmbeddedESServer.scala"
+                      class="shortcut">/app/utils/EmbeddedESServer.scala</a> for the embedded server code. There is a
+    custom <code>Global</code> defined <a href="#code/app/Global.scala" class="shortcut">/app/Global.scala</a>
+    where the embedded server is started and shutdown as part of the application lifecycle.
     </p>
 </div>
 <div>
@@ -125,13 +129,37 @@
         application in some other way. The <code>Tick</code> is sent to <code>self</code> before being forwarded on to
         the <code>LogEntryProducerActor</code>.
     </p>
+
+    <h3>ElasticsearchActor</h3>
+
+    <p>
+        This actor has responsibility for both registering queries in Elasticsearch and percolating log entry documents
+        against those queries. Rather than utilise the Elasticsearch Java Client, the code, instead, crafts the
+        Elasticsearch API calls manually, using the asynchronous Play! WS API to execute them. For simplicity, the calls
+        are hardcoded to talk to Elasticsearch on localhost:9200 (where the embedded server will be listening).
+    </p>
+
+    <p>
+        The code is fairly self explanatory within this actor. Do note that there is a lack of error handling on the API
+        calls thus making this actor unsuitable for production use in its current form. It is recommended you read
+        the Elasticsearch <a href="http://www.elasticsearch.org/guide/reference/api/percolate/">documentation on
+        percolation</a> to learn more about this powerful feature.
+    </p>
+
+    <h3>LogEntryProducerActor</h3>
+
+    <p>
+        This tutorial won't go into the detail of this actor. Suffice to say, its job is to generate a random log event
+        whenever it receives a <code>Tick</code> message. In reality, a genuine source of log events would replace this
+        actor.
+    </p>
 </div>
 <div>
     <h2>The Play! Controller</h2>
 
     <p>
         As most of the server-side logic exists within the actors, the single Play! controller is very simple. The most
-        interesting aspect of the controller is the action that opens an event stream with the client:
+        interesting aspect of the controller is the action that opens an event stream connected with the client:
         <pre>
             <code>
                 def search(searchString: String) = Action {
@@ -150,69 +178,83 @@
     pick up a reply from the recipient actor. In this scenario, a <a href="#code/app/models/SearchProtocol.scala"
                                                                      class="shortcut">StartSearch</a>
     message is sent to the <a href="#code/app/actors/MainSearchActor.scala" class="shortcut">MainSearchActor</a> which
-    replies with the <code>Enumerator</code> that is used to stream search results to the client.
+    replies with the <code>Enumerator</code> that is used to stream search results to the client. Given the use of
+    the 'ask' pattern, we wrap the action logic in an <code>Async</code> block so not to block other requests whilst
+    waiting for the reply.
+    </p>
+    <p>
+</div>
+<div>
+    <h2>The User Interface</h2>
+
+    <p>
+        The key parts of the application UI are:
+    <ol>
+        <li>A Play! template with AngularJS specific markup <a href="#code/app/views/index.scala.html"
+                                                               class="shortcut">/app/views/index.scala.html</a></li>
+        <li>A single AngularJS controller <a href="#code/app/assets/javascripts/controllers.js"
+                                             class="shortcut">/app/assets/javascripts/controllers.js</a></li>
+    </ol>
+    The application makes use of the <a href="http://www.webjars.org/">WebJar</a> project to hugely simplify the
+    introduction of JS and CSS dependencies (e.g. AngularJS and Twitter Bootstrap).
+    </p>
+    <h3>UI Template</h3>
+
+    <p>
+        The UI template can be found at <a href="#code/app/views/index.scala.html" class="shortcut">/app/views/index.scala.html</a>.
+        Let's take a look at the main markup:
+
+        <pre>
+            <code>
+                &lt;div ng-controller=&quot;SearchCtrl&quot;&gt;<br/> &lt;div class=&quot;well&quot; id=&quot;search&quot;&gt;<br/>
+                &lt;form class=&quot;form-search&quot; ng-submit=&quot;startSearching()&quot;&gt;<br/> &lt;input type=&quot;text&quot;
+                class=&quot;input-xlarge search-query&quot; name=&quot;searchString&quot; id=&quot;textField&quot;
+                ng-model=&quot;searchString&quot; placeholder=&quot;Enter Lucene query string&quot;/&gt;<br/> &lt;input
+                type=&quot;button&quot; class=&quot;btn btn-primary&quot; id=&quot;search&quot; value=&quot;Search&quot;
+                ng-click=&quot;startSearching()&quot;
+                /&gt;<br/> &lt;/form&gt;<br/> &lt;/div&gt;<br/> &lt;div id=&quot;results&quot;&gt;<br/> &lt;table class=&quot;table
+                table-striped&quot;&gt;<br/> &lt;thead&gt;<br/> &lt;tr&gt;<br/> &lt;th&gt;Timestamp&lt;/th&gt;<br/> &lt;th&gt;Method&lt;/th&gt;<br/>
+                &lt;th&gt;Path&lt;/th&gt;<br/> &lt;th&gt;Status&lt;/th&gt;<br/> &lt;th&gt;Time (ms)&lt;/th&gt;<br/> &lt;th&gt;Device&lt;/th&gt;<br/>
+                &lt;th&gt;User Agent&lt;/th&gt;<br/> &lt;/tr&gt;<br/> &lt;/thead&gt;<br/> &lt;tbody&gt;<br/> &lt;tr
+                ng-repeat=&quot;searchResult in searchResults | limitTo:10&quot;&gt;<br/> &lt;td&gt;{{searchResult.timestamp}}&lt;/td&gt;<br/>
+                &lt;td&gt;{{searchResult.method}}&lt;/td&gt;<br/> &lt;td&gt;{{searchResult.path}}&lt;/td&gt;<br/> &lt;td&gt;{{searchResult.status}}&lt;/td&gt;<br/>
+                &lt;td&gt;{{searchResult.response_time}}&lt;/td&gt;<br/>
+                &lt;td&gt;{{searchResult.device}}&lt;/td&gt;<br/> &lt;td&gt;{{searchResult.user_agent}}&lt;/td&gt;<br/>
+                &lt;/tr&gt;<br/> &lt;/tbody&gt;<br/> &lt;/table&gt;<br/> &lt;/div&gt;<br/> &lt;/div&gt;
+            </code>
+        </pre>
+    Firstly, the opening <code>&lt;div&gt;</code> is linked to the controller <code>SearchCtrl</code> that
+    subsequently enables the automagical databinding power of AngularJS. A simple search form captures an Apache
+    Lucene formatted query string. A search can be started by clicking on the 'Search' button which invokes the <code>startSearching()</code>
+    function defined in the controller. Finally, you can see the use of AngularJS two-way databinding to render
+    matching search results contained within the view model <code>&lt;tr ng-repeat=&quot;searchResult in searchResults |
+    limitTo:10&quot;&gt;</code> (only displays the latest 10 matches)
+    </p>
+    <h3>The AngularJS Controller</h3>
+
+    <p>
+        The AngularJS controller is fairly straightforward. The key part is handling a new search:
+        <pre>
+            <code>
+                $scope.startSearching = function () {
+                $scope.stopSearching()
+                $scope.searchResults = [];
+                $scope.searchFeed = new EventSource("/search/" + $scope.searchString);
+                $scope.searchFeed.addEventListener("message", $scope.addSearchResult, false);
+                };
+            </code>
+        </pre>
+    Firstly, an existing search is stopped (if running) and the results model cleared (will automagically clear any
+    existing results from the HTML markup). Secondly, an event stream connection is made to the server and an event
+    listener is added that pushes matching search results into the model as they arrive from the server.
     </p>
 </div>
 <div>
-    <h2>Tutorial Structure</h2>
-
-    <p>
-        The tutorial you are reading right now comes from the <a href="#code/tutorial/index.html" class="shortcut">/tutorial/index.html</a>
-        file.
-    </p>
-
-    <p>
-        Each section of the tutorial must be in a <code>&lt;div&gt;</code> tag that is inside the <code>
-        &lt;body&gt;</code> tag. Each section must have a single <code>&lt;h2&gt;</code> tag that contains the section's
-        title.
-    </p>
-
-    <p>
-        The tutorial can provide shortcut links to places in Activator by using an anchor link (<code>#</code>) and the
-        <code>shortcut</code> class, like:
-    <pre><code>&lt;a href="#code/tutorial/index.html" class="shortcut"&gt;/tutorial/index.html&lt;/a&gt;</code></pre>
-    </p>
-
-    <p>
-        Code blocks can use <code>&lt;pre&gt;&lt;code&gt;&lt;/code&gt;&lt;/pre&gt;</code> tags, like:
-        <pre><code>&lt;pre&gt;&lt;code&gt;println("hello, Scala!")
-            val foo = "Bar"&lt;/code&gt;&lt;/pre&gt;</code></pre>
-    </p>
-
-    <p>
-        In-line code can use just the <code>&lt;code&gt;&lt;/code&gt;</code> tag, like:
-    <pre><code>The &lt;code&gt;val foo = "Bar"&lt;/code&gt; statement sets &lt;code&gt;foo&lt;/code&gt; to &lt;code&gt;Bar&lt;/code&gt;</code></pre>
-    </p>
-</div>
-<div>
-    <h2>Metadata Structure</h2>
-
-    <p>
-        Activator templates must provide an <a href="#code/activator.properties"
-                                               class="shortcut">activator.properties</a> file which contains the
-        template metadata. The required properties are:
-    <ul>
-        <li><code>name</code> - A globally unique, URL friendly name for the template</li>
-        <li><code>title</code> - A human readable name for the template</li>
-        <li><code>description</code> - A plain text description for the template</li>
-        <li><code>tags</code> - A comma-seperated list of tags for the template</li>
-    </ul>
-    These values will be verified when you publish your template.
-    </p>
-</div>
-<div>
-    <h2>Publishing</h2>
-
-    <p>
-        At this time templates must first be published publicly on <a href="http://github.com"
-                                                                      target="_blank">GitHub</a>. Then they can be added
-        to Activator through the <a href="http://typesafe.com/activator/template/contribute" target="_blank">Activator
-        Contribution</a> page. There you can enter a Git URL, like:
-    <pre><code>git://github.com/typesafehub/activator-template-template.git</code></pre>
-    This will use the <code>master</code> branch of your repo.
-    Soon publishing will happen automatically whenever your GitHub repo changes (for the specified branch). Until then
-    you will need to go through this process every time you want to publish a new version.
-    </p>
+    <h2>Using the application</h2>
+    Using the application is as simple as entering an Apache Lucene formatted query. Please read the Lucene <a
+        href="http://lucene.apache.org/core/4_3_1/queryparser/org/apache/lucene/queryparser/classic/package-summary.html#package_description">query
+    parser syntax documentation</a> for more information on how to construct query strings. A simple example would be to
+    enter "GET" as your query string, thus matching all log entries for GET requests.
 </div>
 </body>
 </html>

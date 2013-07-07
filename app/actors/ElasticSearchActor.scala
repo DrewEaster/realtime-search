@@ -7,8 +7,6 @@ import play.api.libs.json.{JsArray, JsValue, Json}
 import java.util.UUID
 import scala.concurrent.ExecutionContext
 import ExecutionContext.Implicits.global
-import play.api.Logger
-
 /**
   */
 class ElasticsearchActor extends Actor {
@@ -34,12 +32,10 @@ class ElasticsearchActor extends Actor {
   }
 
   private def unregisterQuery(id: UUID) {
-    Logger.info("Unregistering percolation query with id '" + id + "'")
     WS.url("http://localhost:9200/_percolator/logentries/" + id.toString).delete
   }
 
   private def registerQuery(id: UUID, searchString: String) {
-    Logger.info("Registering percolation query '" + searchString + "' with id '" + id + "'")
     val query = Json.obj(
       "query" -> Json.obj(
         "query_string" -> Json.obj(
