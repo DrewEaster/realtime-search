@@ -11,7 +11,7 @@ import play.api.Logger
 
 /**
   */
-class ElasticSearchActor extends Actor {
+class ElasticsearchActor extends Actor {
 
   def receive = {
     case LogEntry(data) => percolate(data, sender)

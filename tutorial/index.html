@@ -1,0 +1,218 @@
+<html>
+<head>
+    <title>Reactive Real-time Search</title>
+</head>
+<body>
+<div>
+    <h2>Introduction</h2>
+
+    <p>
+        This Activator Template is a simple demonstration of integrating Play, Akka, AngularJS and Elasticsearch
+        to create a reactive, real-time log entry search application. The log entry data is in this example is just
+        'randomly' generated for the purposes of keeping things simple.
+    </p>
+
+    <p>
+
+    <h3>Play! and Akka</h3>
+    We use Play! and Akka to implement the reactive server-side application. The application favours SSE (Server Sent
+    Events) to push updates to the client. The template introduces a number of interesting topics, including Play!
+    Iteratees/Enumerators and Akka Actors.
+    </p>
+    <p>
+
+    <h3>AngularJS</h3>
+    AngularJS has been chosen on the client-side to demonstrate how simple it can be to build a dynamic, real-time user
+    experience with very little code.
+    </p>
+    <p>
+
+    <h3>Elasticsearch</h3>
+    We use the bonsai cool percolation feature of Elasticsearch to achieve the real-time search aspect of the
+    application. The application starts
+    up an embedded Elasticsearch node, so no need to run your own external instance.
+    </p>
+</div>
+<div>
+    <h2>The Actors</h2>
+
+    <p>
+        The application has three actors:
+
+    <ul>
+        <li><a href="#code/app/actors/MainSearchActor.scala" class="shortcut">/app/actors/MainSearchActor.scala</a> -
+            supervises and
+            coordinates data flows
+        </li>
+        <li><a href="#code/app/actors/ElasticsearchActor.scala"
+               class="shortcut">/app/actors/ElasticSearchActor.scala</a> - interacts
+            with Elasticsearch percolation API
+        </li>
+        <li><a href="#code/app/actors/LogEntryProducerActor.scala" class="shortcut">/app/actors/LogEntryProducerActor.scala</a>
+            -
+            generates 'random' log entry data
+        </li>
+    </ul>
+    </p>
+    <p>
+
+    <h3>MainSearchActor</h3>
+    This actor's job is to coordinate the reactive parts of the application and supervise the other actors. It is the
+    main dependency of the application's single Play! controller <a href="#code/app/controllers/Application.scala"
+                                                                    class="shortcut">/app/controllers/Application.scala</a>
+    </p>
+    <h4>Starting/stopping a search</h4>
+
+    <p>The actor responds to a <a href="#code/app/models/SearchProtocol.scala" class="shortcut">StartSearch</a> message
+        by 'replying' with an Enumerator to the sender. The Enumerator wraps a unicast channel to which log
+        entries are pushed that match the search string sent within the message. Let's take a look at some code:
+        <pre>
+            <code>private def startSearching(startSearch: StartSearch) =
+                Concurrent.unicast[JsValue](
+                onStart = (c) => {
+                channels += (startSearch.id -> c)
+                elasticSearchActor ! startSearch
+                },
+                onComplete = {
+                self ! StopSearch(startSearch.id)
+                },
+                onError = (str, in) => {
+                self ! StopSearch(startSearch.id)
+                }
+                ).onDoneEnumerating(
+                callback = {
+                self ! StopSearch(startSearch.id)
+                }
+                )
+            </code>
+        </pre>
+    The Play! Iteratees library, gives us the very handy <code>Concurrent</code> utilities. In this case, <code>Concurrent.unicast</code>
+    is called to create an Enumerator that encloses a <code>Concurrent.Channel</code>. When the channel starts
+    (<code>onStart</code>), it is stored in a map local to the actor (using UUID as key) and the
+    <code>StartSearch</code> message is forwarded onto the <a href="#code/app/actors/ElasticsearchActor.scala"
+                                                              class="shortcut">ElasticSearchActor</a> where the query
+    will be percolated in Elasticsearch. It's worth noting that this code is not production ready - it ought to be a
+    transactional operation, i.e. we should only store the channel once we know Elasticsearch has successfully
+    percolated the query. You will notice that a <code>StopSearch</code> message is sent to <code>self</code> such that
+    the channel is removed from the local map, and the percolated query is deleted, when the channel is no longer
+    useful (i.e. is closed by the client, or an error occurs).
+    </p>
+    <h4>Broadcasting matching results</h4>
+
+    <p>
+        The actor will receive a <a href="#code/app/models/SearchProtocol.scala" class="shortcut">SearchMatch</a>
+        message when a log entry has matched a percolated query.
+        <pre>
+            <code>
+                private def broadcastMatch(searchMatch: SearchMatch) {
+                searchMatch.matchingChannelIds.foreach {
+                channels.get(_).map {
+                _ push searchMatch.logEntry.data
+                }
+                }
+                }
+            </code>
+        </pre>
+    On receipt of the message, each matching id is iterated over and the corresponding channel is retrieved from the
+    local map. The log entry is then pushed to the channel, and thus onto the client.
+    </p>
+    <h4>Scheduling log entry creation</h4>
+
+    <p>
+        The actor uses the Akka scheduler to send a <a href="#code/app/models/SearchProtocol.scala" class="shortcut">Tick</a>
+        to the <a href="#code/app/actors/LogEntryProducerActor.scala" class="shortcut">LogEntryProducerActor</a> every
+        second - in the real world, this would obviously be unnecessary, as genuine log entries would be fed into the
+        application in some other way. The <code>Tick</code> is sent to <code>self</code> before being forwarded on to
+        the <code>LogEntryProducerActor</code>.
+    </p>
+</div>
+<div>
+    <h2>The Play! Controller</h2>
+
+    <p>
+        As most of the server-side logic exists within the actors, the single Play! controller is very simple. The most
+        interesting aspect of the controller is the action that opens an event stream with the client:
+        <pre>
+            <code>
+                def search(searchString: String) = Action {
+                Async {
+                (searchActor ? StartSearch(searchString = searchString)).map {
+                case SearchFeed(out) => {
+                Ok.stream(out &> EventSource()).as("text/event-stream")
+                }
+                }
+                }
+                }
+            </code>
+        </pre>
+    The most important thing to note is the use of the Akka 'ask' pattern of message exchange (notice the use of '?'
+    instead of '!'). This differs from the more typical fire-and-forget approach in that we're able to asynchronously
+    pick up a reply from the recipient actor. In this scenario, a <a href="#code/app/models/SearchProtocol.scala"
+                                                                     class="shortcut">StartSearch</a>
+    message is sent to the <a href="#code/app/actors/MainSearchActor.scala" class="shortcut">MainSearchActor</a> which
+    replies with the <code>Enumerator</code> that is used to stream search results to the client.
+    </p>
+</div>
+<div>
+    <h2>Tutorial Structure</h2>
+
+    <p>
+        The tutorial you are reading right now comes from the <a href="#code/tutorial/index.html" class="shortcut">/tutorial/index.html</a>
+        file.
+    </p>
+
+    <p>
+        Each section of the tutorial must be in a <code>&lt;div&gt;</code> tag that is inside the <code>
+        &lt;body&gt;</code> tag. Each section must have a single <code>&lt;h2&gt;</code> tag that contains the section's
+        title.
+    </p>
+
+    <p>
+        The tutorial can provide shortcut links to places in Activator by using an anchor link (<code>#</code>) and the
+        <code>shortcut</code> class, like:
+    <pre><code>&lt;a href="#code/tutorial/index.html" class="shortcut"&gt;/tutorial/index.html&lt;/a&gt;</code></pre>
+    </p>
+
+    <p>
+        Code blocks can use <code>&lt;pre&gt;&lt;code&gt;&lt;/code&gt;&lt;/pre&gt;</code> tags, like:
+        <pre><code>&lt;pre&gt;&lt;code&gt;println("hello, Scala!")
+            val foo = "Bar"&lt;/code&gt;&lt;/pre&gt;</code></pre>
+    </p>
+
+    <p>
+        In-line code can use just the <code>&lt;code&gt;&lt;/code&gt;</code> tag, like:
+    <pre><code>The &lt;code&gt;val foo = "Bar"&lt;/code&gt; statement sets &lt;code&gt;foo&lt;/code&gt; to &lt;code&gt;Bar&lt;/code&gt;</code></pre>
+    </p>
+</div>
+<div>
+    <h2>Metadata Structure</h2>
+
+    <p>
+        Activator templates must provide an <a href="#code/activator.properties"
+                                               class="shortcut">activator.properties</a> file which contains the
+        template metadata. The required properties are:
+    <ul>
+        <li><code>name</code> - A globally unique, URL friendly name for the template</li>
+        <li><code>title</code> - A human readable name for the template</li>
+        <li><code>description</code> - A plain text description for the template</li>
+        <li><code>tags</code> - A comma-seperated list of tags for the template</li>
+    </ul>
+    These values will be verified when you publish your template.
+    </p>
+</div>
+<div>
+    <h2>Publishing</h2>
+
+    <p>
+        At this time templates must first be published publicly on <a href="http://github.com"
+                                                                      target="_blank">GitHub</a>. Then they can be added
+        to Activator through the <a href="http://typesafe.com/activator/template/contribute" target="_blank">Activator
+        Contribution</a> page. There you can enter a Git URL, like:
+    <pre><code>git://github.com/typesafehub/activator-template-template.git</code></pre>
+    This will use the <code>master</code> branch of your repo.
+    Soon publishing will happen automatically whenever your GitHub repo changes (for the specified branch). Until then
+    you will need to go through this process every time you want to publish a new version.
+    </p>
+</div>
+</body>
+</html>

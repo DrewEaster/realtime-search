@@ -21,7 +21,7 @@ class MainSearchActor extends Actor {
 
   var channels = new HashMap[UUID, Concurrent.Channel[JsValue]]
 
-  val elasticSearchActor = context.system.actorOf(Props[ElasticSearchActor], "elasticSearchActor")
+  val elasticSearchActor = context.system.actorOf(Props[ElasticsearchActor], "elasticSearchActor")
 
   val logEntryProducerActor = context.system.actorOf(Props[LogEntryProducerActor], "logEntryProducerActor")
 
@@ -51,7 +51,6 @@ class MainSearchActor extends Actor {
   private def startSearching(startSearch: StartSearch) =
     Concurrent.unicast[JsValue](
       onStart = (c) => {
-        // TODO: Need to coordinate these actions
         channels += (startSearch.id -> c)
         elasticSearchActor ! startSearch
       },
@@ -62,14 +61,12 @@ class MainSearchActor extends Actor {
         self ! StopSearch(startSearch.id)
       }
     ).onDoneEnumerating(
-      // TODO: What's the difference between onDoneEnumerating() and onComplete (above)?
       callback = {
         self ! StopSearch(startSearch.id)
       }
     )
 
   private def stopSearching(stopSearch: StopSearch) {
-    // TODO: Need to coordinate these actions
     channels -= stopSearch.id
     elasticSearchActor ! stopSearch
   }
