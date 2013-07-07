@@ -1,0 +1,53 @@
+@(title: String)
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title>@title</title>
+    <link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/main.css")">
+    <link rel="stylesheet" media="screen" href="@routes.WebJarAssets.at(WebJarAssets.locate("bootstrap.min.css"))">
+    <link rel="shortcut icon" type="image/png" href="@routes.Assets.at("images/favicon.png")">
+
+    <script src="@routes.WebJarAssets.at(WebJarAssets.locate("angular.min.js"))"></script>
+    <script src="@routes.Assets.at("javascripts/controllers.js")"></script>
+    <script src="@routes.Assets.at("javascripts/app.js")"></script>
+</head>
+<body ng-app="realtimeSearch">
+
+    <div ng-controller="SearchCtrl">
+        <div class="well" id="search">
+            <form class="form-search" ng-submit="startSearching()">
+                <input type="text" class="input-xlarge search-query" name="searchString" id="textField" ng-model="searchString" placeholder="Enter search string"/>
+                <input type="button" class="btn btn-primary" id="search" value="Search" ng-click="startSearching()" />
+            </form>
+        </div>
+        <div id="results">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Method</th>
+                        <th>Path</th>
+                        <th>Status</th>
+                        <th>Time (ms)</th>
+                        <th>Device</th>
+                        <th>User Agent</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr ng-repeat="searchResult in searchResults | limitTo:10">
+                        <td>{{searchResult.timestamp}}</td>
+                        <td>{{searchResult.method}}</td>
+                        <td>{{searchResult.path}}</td>
+                        <td>{{searchResult.status}}</td>
+                        <td>{{searchResult.response_time}}</td>
+                        <td>{{searchResult.device}}</td>
+                        <td>{{searchResult.user_agent}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
