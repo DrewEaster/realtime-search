@@ -28,9 +28,7 @@ object Application extends Controller {
   def search(searchString: String) = Action {
     Async {
       (searchActor ? StartSearch(searchString = searchString)).map {
-        case SearchFeed(out) => {
-          Ok.stream(out &> EventSource()).as("text/event-stream")
-        }
+        case SearchFeed(out) => Ok.stream(out &> EventSource()).as("text/event-stream")
       }
     }
   }

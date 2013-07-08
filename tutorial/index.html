@@ -16,20 +16,20 @@
     <p>
 
     <h3>Play! and Akka</h3>
-    We use Play! and Akka to implement the reactive server-side application. The application favours SSE (Server Sent
+    Play! and Akka are used to implement the reactive server-side application. The application favours SSE (Server Sent
     Events) to push updates to the client. The template introduces a number of interesting topics, including Play!
     Iteratees/Enumerators and Akka Actors.
     </p>
     <p>
 
     <h3>AngularJS</h3>
-    AngularJS has been chosen on the client-side to demonstrate how simple it can be to build a dynamic, real-time user
-    experience with very little code.
+    AngularJS has been chosen on the client-side to demonstrate how simple it can be to build a dynamic, single page
+    user experience with very little code.
     </p>
     <p>
 
     <h3>Elasticsearch</h3>
-    We use the "bonsai cool" percolation feature of Elasticsearch to achieve the real-time search aspect of the
+    The "bonsai cool" percolation feature of Elasticsearch achieves the real-time search aspect of the
     application. The application starts up an embedded Elasticsearch node, so no need to run your own external instance.
     Take a look at <a href="#code/app/utils/EmbeddedESServer.scala"
                       class="shortcut">/app/utils/EmbeddedESServer.scala</a> for the embedded server code. There is a
@@ -45,16 +45,13 @@
 
     <ul>
         <li><a href="#code/app/actors/MainSearchActor.scala" class="shortcut">/app/actors/MainSearchActor.scala</a> -
-            supervises and
-            coordinates data flows
+            supervises and coordinates data flows
         </li>
         <li><a href="#code/app/actors/ElasticsearchActor.scala"
-               class="shortcut">/app/actors/ElasticSearchActor.scala</a> - interacts
-            with Elasticsearch percolation API
+               class="shortcut">/app/actors/ElasticSearchActor.scala</a> - interacts with Elasticsearch percolation API
         </li>
         <li><a href="#code/app/actors/LogEntryProducerActor.scala" class="shortcut">/app/actors/LogEntryProducerActor.scala</a>
-            -
-            generates 'random' log entry data
+            - generates 'random' log entry data
         </li>
     </ul>
     </p>
@@ -69,28 +66,28 @@
 
     <p>The actor responds to a <a href="#code/app/models/SearchProtocol.scala" class="shortcut">StartSearch</a> message
         by 'replying' with an Enumerator to the sender. The Enumerator wraps a unicast channel to which log
-        entries are pushed that match the search string sent within the message. Let's take a look at some code:
+        entries are pushed that match the query string sent within the message. Let's take a look at some code:
         <pre>
             <code>private def startSearching(startSearch: StartSearch) =
-                Concurrent.unicast[JsValue](
-                onStart = (c) => {
-                channels += (startSearch.id -> c)
-                elasticSearchActor ! startSearch
-                },
-                onComplete = {
-                self ! StopSearch(startSearch.id)
-                },
-                onError = (str, in) => {
-                self ! StopSearch(startSearch.id)
-                }
-                ).onDoneEnumerating(
-                callback = {
-                self ! StopSearch(startSearch.id)
-                }
-                )
+                    Concurrent.unicast[JsValue](
+                        onStart = (c) => {
+                            channels += (startSearch.id -> c)
+                            elasticSearchActor ! startSearch
+                        },
+                        onComplete = {
+                            self ! StopSearch(startSearch.id)
+                        },
+                        onError = (str, in) => {
+                            self ! StopSearch(startSearch.id)
+                        }
+                    ).onDoneEnumerating(
+                        callback = {
+                            self ! StopSearch(startSearch.id)
+                        }
+                    )
             </code>
         </pre>
-    The Play! Iteratees library, gives us the very handy <code>Concurrent</code> utilities. In this case, <code>Concurrent.unicast</code>
+    The Play! Iteratees library, has the very handy <code>Concurrent</code> utilities. In this case, <code>Concurrent.unicast</code>
     is called to create an Enumerator that encloses a <code>Concurrent.Channel</code>. When the channel starts
     (<code>onStart</code>), it is stored in a map local to the actor (using UUID as key) and the
     <code>StartSearch</code> message is forwarded onto the <a href="#code/app/actors/ElasticsearchActor.scala"
@@ -109,11 +106,11 @@
         <pre>
             <code>
                 private def broadcastMatch(searchMatch: SearchMatch) {
-                searchMatch.matchingChannelIds.foreach {
-                channels.get(_).map {
-                _ push searchMatch.logEntry.data
-                }
-                }
+                    searchMatch.matchingChannelIds.foreach {
+                        channels.get(_).map {
+                            _ push searchMatch.logEntry.data
+                        }
+                    }
                 }
             </code>
         </pre>
@@ -135,8 +132,9 @@
     <p>
         This actor has responsibility for both registering queries in Elasticsearch and percolating log entry documents
         against those queries. Rather than utilise the Elasticsearch Java Client, the code, instead, crafts the
-        Elasticsearch API calls manually, using the asynchronous Play! WS API to execute them. For simplicity, the calls
-        are hardcoded to talk to Elasticsearch on localhost:9200 (where the embedded server will be listening).
+        Elasticsearch API calls manually, demonstrating the use of the asynchronous Play! WS API to execute them. For
+        simplicity, the calls are hardcoded to talk to Elasticsearch on localhost:9200 (where the embedded server will
+        be listening).
     </p>
 
     <p>
@@ -147,7 +145,7 @@
     </p>
 
     <p>
-        There's also one little important gotcha this code has avoided - closing over the <code>sender</code> ref in an
+        There's one little important gotcha this code has avoided - closing over the <code>sender</code> ref in an
         asynchronous callback block. The <code>sender</code> ref is part of the shared mutable state of the actor and
         so, if the actor were to reply to the sender in the percolate callback, a race condition would be encountered if
         another thread had modified the actor's state before the percolation call to Elasticsearch had completed. This
@@ -173,13 +171,11 @@
         <pre>
             <code>
                 def search(searchString: String) = Action {
-                Async {
-                (searchActor ? StartSearch(searchString = searchString)).map {
-                case SearchFeed(out) => {
-                Ok.stream(out &> EventSource()).as("text/event-stream")
-                }
-                }
-                }
+                    Async {
+                        (searchActor ? StartSearch(searchString = searchString)).map {
+                            case SearchFeed(out) => Ok.stream(out &> EventSource()).as("text/event-stream")
+                        }
+                    }
                 }
             </code>
         </pre>
@@ -188,9 +184,9 @@
     pick up a reply from the recipient actor. In this scenario, a <a href="#code/app/models/SearchProtocol.scala"
                                                                      class="shortcut">StartSearch</a>
     message is sent to the <a href="#code/app/actors/MainSearchActor.scala" class="shortcut">MainSearchActor</a> which
-    replies with the <code>Enumerator</code> that is used to stream search results to the client. Given the use of
-    the 'ask' pattern, we wrap the action logic in an <code>Async</code> block so not to block other requests whilst
-    waiting for the reply.
+    replies with an <code>Enumerator</code> used to stream search results to the client. Given the use of the 'ask'
+    pattern, we wrap the action logic in an <code>Async</code> block so not to block other requests whilst waiting for
+    the reply.
     </p>
     <p>
 </div>
@@ -247,10 +243,10 @@
         <pre>
             <code>
                 $scope.startSearching = function () {
-                $scope.stopSearching()
-                $scope.searchResults = [];
-                $scope.searchFeed = new EventSource("/search/" + $scope.searchString);
-                $scope.searchFeed.addEventListener("message", $scope.addSearchResult, false);
+                    $scope.stopSearching()
+                    $scope.searchResults = [];
+                    $scope.searchFeed = new EventSource("/search/" + $scope.searchString);
+                    $scope.searchFeed.addEventListener("message", $scope.addSearchResult, false);
                 };
             </code>
         </pre>
@@ -263,8 +259,8 @@
     <h2>Using the application</h2>
     Using the application is as simple as entering an Apache Lucene formatted query. Please read the Lucene <a
         href="http://lucene.apache.org/core/4_3_1/queryparser/org/apache/lucene/queryparser/classic/package-summary.html#package_description">query
-    parser syntax documentation</a> for more information on how to construct query strings. A simple example would be to
-    enter "GET" as your query string, thus matching all log entries for GET requests.
+    parser syntax documentation</a> for more information on how to construct Lucene query strings. A simple example
+    would be to enter "GET" as your query string, thus matching all log entries for GET requests.
 </div>
 </body>
 </html>
