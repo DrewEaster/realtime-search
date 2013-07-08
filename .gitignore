@@ -2,6 +2,7 @@ logs
 project/project
 project/target
 target
+elasticsearch-data
 tmp
 .history
 dist
