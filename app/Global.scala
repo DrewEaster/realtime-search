@@ -11,6 +11,7 @@ object Global extends GlobalSettings {
 
   override def onStart(app: Application) {
     esDataDirectory = new File(app.path, "elasticsearch-data")
+    FileUtils.deleteDirectory(esDataDirectory)
     esServer = new EmbeddedESServer(esDataDirectory)
     esServer.client.admin.indices.prepareCreate("logentries").execute().get
   }
