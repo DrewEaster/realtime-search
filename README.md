@@ -3,7 +3,7 @@ Reactive, real-time log search with Play, Akka, AngularJS and Elasticsearch
 
 Demonstration using Play!, Akka, AngularJS and Elasticsearch to perform real-time log entry search.
 
-Please see accompanying blog article at **[responsiblysourced.wordpress.com](http://responsiblysourced.wordpress.com/2013/07/08/reactive-real-time-log-search-with-play-akka-angularjs-and-elasticsearch/)**.
+Please see accompanying [blog article](http://www.dreweaster.com/blog/2013/07/08/reactive-real-time-log-search-with-play-akka-angularjs-and-elasticsearch/).
 
 ## Licence
 
