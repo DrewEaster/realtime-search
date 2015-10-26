@@ -1,5 +1,6 @@
 package actors
 
+import play.api.Logger
 import akka.actor.{Actor}
 import java.util.Random
 import play.api.libs.json.Json
@@ -7,6 +8,7 @@ import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 import models.{LogEntry, Tick}
 
+import play.api.libs.json._
 /**
   */
 class LogEntryProducerActor extends Actor {
@@ -24,10 +26,12 @@ class LogEntryProducerActor extends Actor {
   val statuses = Array(200, 404, 201, 500)
 
   def receive = {
-    case Tick => sender ! LogEntry(generateLogEntry)
+    case Tick =>
+      Logger.debug(s"Recv'd Tick @ ${new java.util.Date()}")
+      sender ! LogEntry(generateLogEntry)
   }
 
-  private def generateLogEntry = {
+  private def generateLogEntry: JsObject = {
     Json.obj(
       "timestamp" -> currentTimestamp,
       "response_time" -> randomResponseTime,
@@ -38,6 +42,8 @@ class LogEntryProducerActor extends Actor {
       "user_agent" -> randomElement(userAgents)
     )
   }
+  
+
 
   private def randomElement[A](list: Array[A]) = {
     val rand = new Random(System.currentTimeMillis())
@@ -48,4 +54,40 @@ class LogEntryProducerActor extends Actor {
   private def randomResponseTime = new Random(System.currentTimeMillis()).nextInt(1000)
 
   private def currentTimestamp = timestampFormat.print(new DateTime(System.currentTimeMillis()))
+}
+
+
+ 
+object LogEntryProducerActor { 
+
+  def logEntryESMapping: JsValue = { 
+    Json.parse("""{  
+    		"logentry": {
+            "properties": {
+               "device": {
+                  "type": "string"
+               },
+               "method": {
+                  "type": "string"
+               },
+               "path": {
+                  "type": "string"
+               },
+               "response_time": {
+                  "type": "long"
+               },
+               "status": {
+                  "type": "long"
+               },
+               "timestamp": {
+                  "type": "date",
+                  "format": "dateOptionalTime"
+               },
+               "user_agent": {
+                  "type": "string"
+               }
+            }
+         }
+      }""")
+  }  
 }

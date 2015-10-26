@@ -1,5 +1,5 @@
 package controllers
-
+import play.api.Logger
 import play.api.mvc._
 import play.api.libs.concurrent.Akka
 import actors.MainSearchActor
@@ -15,7 +15,7 @@ import scala.concurrent.ExecutionContext
 import ExecutionContext.Implicits.global
 
 
-object Application extends Controller {
+class Application extends Controller {
 
   implicit val timeout = Timeout(5 seconds)
 
@@ -25,11 +25,10 @@ object Application extends Controller {
     Ok(views.html.index("Search logs"))
   }
 
-  def search(searchString: String) = Action {
-    Async {
+  def search(searchString: String) = Action.async {
+      Logger.debug("Application.search called, sending StartSearch")
       (searchActor ? StartSearch(searchString = searchString)).map {
         case SearchFeed(out) => Ok.stream(out &> EventSource()).as("text/event-stream")
       }
-    }
   }
 }

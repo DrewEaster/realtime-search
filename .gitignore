@@ -1,3 +1,4 @@
+*~
 logs
 project/project
 project/target
@@ -17,3 +18,4 @@ dist
 /bin
 /.cache
 /.target
+/RUNNING_PID
