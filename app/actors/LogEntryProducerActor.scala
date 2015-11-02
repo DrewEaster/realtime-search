@@ -1,6 +1,6 @@
 package actors
 
-import play.api.Logger
+
 import akka.actor.{Actor}
 import java.util.Random
 import play.api.libs.json.Json
@@ -27,7 +27,6 @@ class LogEntryProducerActor extends Actor {
 
   def receive = {
     case Tick =>
-      Logger.debug(s"Recv'd Tick @ ${new java.util.Date()}")
       sender ! LogEntry(generateLogEntry)
   }
 
@@ -60,8 +59,8 @@ class LogEntryProducerActor extends Actor {
  
 object LogEntryProducerActor { 
 
-  def logEntryESMapping: JsValue = { 
-    Json.parse("""{  
+  val logEntryESMapping: String = 
+    """{  
     		"logentry": {
             "properties": {
                "device": {
@@ -88,6 +87,25 @@ object LogEntryProducerActor {
                }
             }
          }
-      }""")
+      }"""
+
+  // The LogEntryProducerActor is where all the fields are specified, 
+  // so it's natural to define the query here. 
+  def queryAllStringFields(searchString: String): String = { 
+    s"""
+      { "query" : { 
+           "query_string": {
+              "query":  "${searchString}",
+                 "fields": [
+                    "device",
+                    "method",
+                    "path",
+                     "user_agent"
+                 ]
+           }
+        }
+      }
+     """
   }  
+
 }

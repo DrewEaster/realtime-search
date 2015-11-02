@@ -17,5 +17,6 @@ dist
 /.settings
 /bin
 /.cache
+/.cache-main
 /.target
 /RUNNING_PID

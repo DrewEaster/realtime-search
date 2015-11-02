@@ -2,13 +2,11 @@ package actors
 
 import models._
 
-import play.api.Logger
 import java.util.UUID
 import scala.collection.mutable.HashMap
 import scala.concurrent.duration._
 
 import akka.actor.{Props, Actor, ActorRef}
-import play.api.Logger
 import play.api.libs.iteratee.{Concurrent}
 import play.api.libs.ws.WS
 import play.api.Play.current
@@ -20,10 +18,8 @@ import ExecutionContext.Implicits.global
 import play.api.libs.json.Json
 
 
-/**
-  */
 class MainSearchActor extends Actor {
-
+  
   var channels = new HashMap[UUID, Concurrent.Channel[JsValue]]
 
   val elasticSearchActor = context.system.actorOf(Props[ElasticsearchActor], s"elasticSearchActor")
@@ -45,7 +41,7 @@ class MainSearchActor extends Actor {
   // NOTE: having a mapping registered prior to doing percolate is now required by ES
   def init(): Unit = { 
     val mappingUrl = "http://localhost:9200/logentries/logentry/_mapping"
-    WS.url("http://localhost:9200/logentries/logentry/_mapping").post(Json.stringify(LogEntryProducerActor.logEntryESMapping))
+    WS.url("http://localhost:9200/logentries/logentry/_mapping").post(LogEntryProducerActor.logEntryESMapping)
   }  
   
   override def postStop() {
