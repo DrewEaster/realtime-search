@@ -1,7 +1,8 @@
 package actors
-
+import play.api.Logger
+import play.api.Play.current
 import akka.actor.{ActorRef, Actor}
-import models.{SearchMatch, StopSearch, LogEntry, StartSearch}
+import models.{SearchMatch, StopSearch, LogEntry, StartSearch, RegisterQuery}
 import play.api.libs.ws.WS
 import play.api.libs.json.{JsArray, JsValue, Json}
 import java.util.UUID
@@ -11,6 +12,8 @@ import ExecutionContext.Implicits.global
   */
 class ElasticsearchActor extends Actor {
 
+  val logger = Logger("actors.ElasticsearchActor")
+  
   def receive = {
     case LogEntry(data) => percolate(data, sender)
     case StartSearch(id, searchString) => registerQuery(id, searchString)
@@ -18,15 +21,16 @@ class ElasticsearchActor extends Actor {
   }
 
   private def percolate(logJson: JsValue, requestor: ActorRef) {
+    logger.debug(s"ElasticSearchActor.percolate called with ${logJson}")
     WS.url("http://localhost:9200/logentries/logentry/_percolate").post(Json.stringify(Json.obj("doc" -> logJson))).map {
       response =>
         val body = response.json
-        val status = (body \ "ok").as[Boolean]
-        if (status) {
-          val matchingIds = (body \ "matches").asInstanceOf[JsArray].value.foldLeft(List[UUID]())((acc, v) => UUID.fromString(v.as[String]) :: acc)
+        if ((body \ "total").as[Int] > 0) {  
+          val matchingIds = (body \ "matches").as[JsArray].value.foldLeft(List[UUID]()){(acc,v) => UUID.fromString((v \ "_id").as[String]) :: acc } 
+          logger.debug(s"ElasticSearchActor.percolate response matchingIds = ${matchingIds}\n")
           if (!matchingIds.isEmpty) {
             requestor ! SearchMatch(LogEntry(logJson), matchingIds)
-          }
+          } 
         }
     }
   }
@@ -36,12 +40,11 @@ class ElasticsearchActor extends Actor {
   }
 
   private def registerQuery(id: UUID, searchString: String) {
-    val query = Json.obj(
-      "query" -> Json.obj(
-        "query_string" -> Json.obj(
-          "query" -> searchString
-        )))
-
-    WS.url("http://localhost:9200/_percolator/logentries/" + id.toString).put(Json.stringify(query))
+    logger.debug(s"ElasticSearchActor.registerQuery called with id = ${id} and searchString = ${searchString}")
+    WS.url("http://localhost:9200/logentries/.percolator/" + id.toString).put(LogEntryProducerActor.queryAllStringFields(searchString)).map {
+      response => 
+        logger.debug(s"ElasticSearchActor.registerQuery response = ${response}" ) 
+    }
   }
+  
 }

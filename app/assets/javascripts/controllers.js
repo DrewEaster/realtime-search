@@ -1,7 +1,6 @@
-'use strict';
 
-angular.module('realtimeSearch.controllers', []).
-    controller('SearchCtrl', function ($scope) {
+
+angular.module('realtimeSearch.controllers', []).controller('SearchCtrl', function ($scope) {
         $scope.searchResults = [];
         $scope.searchString = "";
 
@@ -9,10 +8,10 @@ angular.module('realtimeSearch.controllers', []).
             $scope.$apply(function () {
                 $scope.searchResults.unshift(JSON.parse(e.data));
             });
-        }
+        };
 
         $scope.startSearching = function () {
-            $scope.stopSearching()
+            $scope.stopSearching();
             $scope.searchResults = [];
             $scope.searchFeed = new EventSource("/search/" + $scope.searchString);
             $scope.searchFeed.addEventListener("message", $scope.addSearchResult, false);
@@ -22,5 +21,5 @@ angular.module('realtimeSearch.controllers', []).
             if (typeof $scope.searchFeed != 'undefined') {
                 $scope.searchFeed.close();
             }
-        }
+        };
     });
